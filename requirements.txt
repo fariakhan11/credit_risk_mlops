@@ -10,3 +10,4 @@ pytest
 xgboost
 mlflow
 pyyaml
+openpyxl
