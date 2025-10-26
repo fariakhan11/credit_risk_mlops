@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/e4dc2ef78f52408b833ddb40471ad4b3/artifacts
+end_time: 1761473986654
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: e4dc2ef78f52408b833ddb40471ad4b3
+run_name: puzzled-fish-369
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1761473977501
+status: 3
+tags: []
+user_id: Faria Khan

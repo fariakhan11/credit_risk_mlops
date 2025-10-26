@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/35c6bfacf81f4260b27726574be3fc25/artifacts
+end_time: 1761474830135
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: 35c6bfacf81f4260b27726574be3fc25
+run_name: aged-dog-419
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1761474822672
+status: 3
+tags: []
+user_id: Faria Khan

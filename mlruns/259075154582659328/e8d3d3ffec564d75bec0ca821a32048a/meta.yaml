@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/e8d3d3ffec564d75bec0ca821a32048a/artifacts
+end_time: 1760764141063
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: e8d3d3ffec564d75bec0ca821a32048a
+run_name: loud-hawk-656
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1760764132178
+status: 3
+tags: []
+user_id: Faria Khan

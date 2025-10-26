@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/dc9ce950a37f491dbf1456f51e2d08bb/artifacts
+end_time: 1760769237692
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: dc9ce950a37f491dbf1456f51e2d08bb
+run_name: dashing-sheep-120
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1760769231843
+status: 3
+tags: []
+user_id: Faria Khan

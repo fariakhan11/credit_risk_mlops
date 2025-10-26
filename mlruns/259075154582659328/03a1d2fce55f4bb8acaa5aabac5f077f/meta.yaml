@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/03a1d2fce55f4bb8acaa5aabac5f077f/artifacts
+end_time: 1761472960701
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: 03a1d2fce55f4bb8acaa5aabac5f077f
+run_name: honorable-elk-61
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1761472952898
+status: 3
+tags: []
+user_id: Faria Khan

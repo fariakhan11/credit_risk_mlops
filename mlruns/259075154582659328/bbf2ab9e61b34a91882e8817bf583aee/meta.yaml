@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/bbf2ab9e61b34a91882e8817bf583aee/artifacts
+end_time: 1760768623658
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: bbf2ab9e61b34a91882e8817bf583aee
+run_name: amusing-swan-189
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1760768618063
+status: 3
+tags: []
+user_id: Faria Khan

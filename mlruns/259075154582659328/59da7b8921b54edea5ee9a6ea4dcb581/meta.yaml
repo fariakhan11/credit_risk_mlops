@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/59da7b8921b54edea5ee9a6ea4dcb581/artifacts
+end_time: 1760768097283
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: 59da7b8921b54edea5ee9a6ea4dcb581
+run_name: luxuriant-robin-661
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1760768090885
+status: 3
+tags: []
+user_id: Faria Khan

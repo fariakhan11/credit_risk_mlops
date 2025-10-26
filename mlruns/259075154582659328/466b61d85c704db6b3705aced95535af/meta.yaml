@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/466b61d85c704db6b3705aced95535af/artifacts
+end_time: 1760763473944
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: 466b61d85c704db6b3705aced95535af
+run_name: rambunctious-asp-39
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1760763466665
+status: 3
+tags: []
+user_id: Faria Khan

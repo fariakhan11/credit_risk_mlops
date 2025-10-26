@@ -1,0 +1,14 @@
+artifact_uri: mlflow-artifacts:/259075154582659328/d15ec289a0ba4161b3e32de2706bf737/artifacts
+end_time: 1761460589915
+entry_point_name: ''
+experiment_id: '259075154582659328'
+lifecycle_stage: active
+run_id: d15ec289a0ba4161b3e32de2706bf737
+run_name: useful-hound-970
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1761460575095
+status: 3
+tags: []
+user_id: Faria Khan

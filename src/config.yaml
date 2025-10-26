@@ -1,0 +1,7 @@
+paths:
+  data: "data/Financial_Data_Loan_Risk_2_corrupted.xlsx"
+  model: "models/model.pkl"
+
+mlflow:
+  tracking_uri: "http://127.0.0.1:5000"
+  experiment_name: "Credit_Risk_Scoring"
