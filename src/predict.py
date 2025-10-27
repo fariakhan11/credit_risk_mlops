@@ -4,7 +4,7 @@ predict.py
 Loads the trained credit risk model from MLflow Production stage
 and performs predictions. Works for batch inference or CLI usage.
 """
-import os
+import os, joblib
 import yaml
 import mlflow
 import mlflow.sklearn
@@ -31,53 +31,42 @@ def load_config(path: str = "src/config.yaml") -> dict:
 def load_production_model(model_name="Credit_Risk_Model"):
     """
     Loads the latest 'Production' stage model from MLflow registry.
-    Works locally (Windows-safe) and in CI/CD environments.
+    Falls back to local model.pkl if registry not available (for CI/CD tests).
     """
     try:
-        # Detect environment
         MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 
         if not MLFLOW_TRACKING_URI:
             if os.path.exists("mlruns"):
-                # ✅ Local file-based tracking (no registry)
                 MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
             else:
-                # ✅ Default to local MLflow server
                 MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"
 
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
 
-        # If registry (http:// or https://) is available → use Production stage
-        if MLFLOW_TRACKING_URI.startswith("http"):
-            client = MlflowClient()
-            versions = client.search_model_versions(f"name='{model_name}'")
-            prod_versions = [v for v in versions if v.current_stage == "Production"]
+        client = MlflowClient()
+        versions = client.search_model_versions(f"name='{model_name}'")
+        prod_versions = [v for v in versions if v.current_stage == "Production"]
 
-            if not prod_versions:
-                raise HTTPException(status_code=503, detail=f"No Production model found for '{model_name}'")
+        if not prod_versions:
+            raise Exception("No production model in registry")
 
-            model_uri = f"models:/{model_name}/Production"
-            model = mlflow.sklearn.load_model(model_uri)
-            print(f"✅ Loaded Production model {model_name} version {prod_versions[0].version}")
-
-        else:
-            # ✅ File-based fallback (CI/CD or offline mode)
-            latest_run = max(
-                pathlib.Path("mlruns").rglob("model.pkl"),
-                key=os.path.getmtime,
-                default=None
-            )
-            if not latest_run:
-                raise HTTPException(status_code=503, detail="No local model found in mlruns/")
-            model = mlflow.sklearn.load_model(str(latest_run.parent))
-            print(f"✅ Loaded local model from: {latest_run.parent}")
-
+        model_uri = f"models:/{model_name}/Production"
+        model = mlflow.sklearn.load_model(model_uri)
+        print(f"✅ Loaded Production model {model_name}")
         return model
 
     except Exception as e:
-        print(f"❌ Failed to load model: {e}")
-        raise HTTPException(status_code=503, detail="Model not loaded. Try again later.")
+        print(f"⚠️ Could not load model from MLflow: {e}")
+        # ✅ Fallback to local model.pkl (for GitHub Actions)
+        local_model_path = "models/model.pkl"
+        if os.path.exists(local_model_path):
+            print("✅ Loaded local fallback model.pkl")
+            return joblib.load(local_model_path)
+        else:
+            print("❌ No fallback model found.")
+            raise HTTPException(status_code=503, detail="Model not loaded. Try again later.")
 
 
 # ============================================================
