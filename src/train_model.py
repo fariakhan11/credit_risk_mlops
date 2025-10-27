@@ -7,7 +7,7 @@ Logs parameters, metrics, and model artifacts to MLflow,
 and registers the model to MLflow Model Registry (Staging stage).
 """
 
-import os
+import os, pathlib
 import pandas as pd
 import numpy as np
 import mlflow
@@ -33,23 +33,31 @@ from mlflow.tracking import MlflowClient
 # ==============================
 # 0️⃣ MLflow tracking URI
 # ==============================
-# Load config
+
 with open("src/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 mlflow_cfg = config["mlflow"]
 
-# ✅ Dynamically choose tracking URI
-tracking_uri = os.getenv("MLFLOW_TRACKING_URI", mlflow_cfg["tracking_uri"])
+# Dynamically choose tracking URI
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 
-# ✅ If running in CI/CD (like GitHub Actions), use local file-based tracking
-if "GITHUB_ACTIONS" in os.environ:
-    tracking_uri = f"file://{os.path.abspath('mlruns')}"
+if not MLFLOW_TRACKING_URI:
+    if "GITHUB_ACTIONS" in os.environ:
+        # ✅ Use local file path in CI/CD (no MLflow server available)
+        MLFLOW_TRACKING_URI = f"file://{os.path.abspath('mlruns')}"
+    else:
+        # ✅ Local dev: use mlruns folder or MLflow UI if running
+        if os.path.exists("mlruns"):
+            MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
+        else:
+            MLFLOW_TRACKING_URI = mlflow_cfg.get("tracking_uri", "http://127.0.0.1:5000")
 
-mlflow.set_tracking_uri(tracking_uri)
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment(mlflow_cfg["experiment_name"])
 
-print(f"✅ MLflow tracking URI: {tracking_uri}")
+print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
+
 # ==============================
 # 1️⃣ Load configuration
 # ==============================
