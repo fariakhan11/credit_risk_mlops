@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.venv
+env/
+venv/
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Pytest
+.pytest_cache/
+
+# Logs
+*.log
+reports/predictions.log
+
+# MLflow tracking & artifacts
+mlruns/
+models/Credit_Risk_Model/
+models/model.pkl
+
+# OS files
+.DS_Store
+Thumbs.db
