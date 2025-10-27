@@ -3,7 +3,10 @@ name: Credit Risk MLOps CI/CD
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+
 
 jobs:
 
@@ -41,6 +44,12 @@ jobs:
       - name: 🏋️ Train model
         run: python src/train_model.py
 
+      - name: 💾 Upload trained model
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model
+          path: models/model.pkl
+
       - name: ✅ Run model metric validation tests
         run: |
           echo "Running model validation tests..."
@@ -75,6 +84,12 @@ jobs:
         with:
           name: mlruns
           path: mlruns/
+
+      - name: 📥 Download trained model
+        uses: actions/download-artifact@v4
+        with:
+          name: trained-model
+          path: models/
 
       - name: ⚙️ Set up Python
         uses: actions/setup-python@v4
