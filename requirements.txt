@@ -11,3 +11,4 @@ xgboost
 mlflow
 pyyaml
 openpyxl
+httpx

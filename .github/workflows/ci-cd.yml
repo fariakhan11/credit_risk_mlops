@@ -35,7 +35,7 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt httpx
+          pip install -r requirements.txt
 
       - name: 🌐 Set MLflow tracking URI for CI/CD
         # Use file-based mlruns inside workspace so MLflow calls succeed in CI
@@ -100,7 +100,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mlflow pytest
 
       - name: 🌐 Export MLFLOW_TRACKING_URI (file-based)
         run: echo "MLFLOW_TRACKING_URI=file://$GITHUB_WORKSPACE/mlruns" >> $GITHUB_ENV
@@ -136,7 +135,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mlflow
 
       - name: 🌐 Set MLflow tracking URI (file-based)
         run: echo "MLFLOW_TRACKING_URI=file://$GITHUB_WORKSPACE/mlruns" >> $GITHUB_ENV
