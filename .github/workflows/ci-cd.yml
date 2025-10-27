@@ -111,7 +111,7 @@ jobs:
           pytest tests/test_api.py || exit 1
           pytest tests/test_model_metrics.py || exit 1
 
-  # ========================
+    # ========================
   # 4️⃣ Promote to Production
   # ========================
   promote_to_production:
@@ -132,35 +132,18 @@ jobs:
         with:
           python-version: 3.9
 
-      - name: 📦 Install mlflow
-        run: pip install mlflow
-
-      - name: 🚀 Promote model from Staging to Production
+      - name: 📦 Install dependencies
         run: |
-          python - <<'PY'
-          import os
-          from mlflow.tracking import MlflowClient
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install mlflow
 
-          client = MlflowClient(tracking_uri=os.getenv("MLFLOW_TRACKING_URI"))
-          MODEL_NAME = "Credit_Risk_Model"
+      - name: 🌐 Set MLflow tracking URI (file-based)
+        run: echo "MLFLOW_TRACKING_URI=file://$GITHUB_WORKSPACE/mlruns" >> $GITHUB_ENV
 
-          versions = client.search_model_versions(f"name='{MODEL_NAME}'")
-          staging_versions = [v for v in versions if v.current_stage == "Staging"]
-          if not staging_versions:
-              print("❌ No Staging version found to promote.")
-              raise SystemExit(1)
+      - name: 🚀 Promote model to Production
+        run: python src/promote_model.py
 
-          # choose the most recent staging version
-          latest_staging = staging_versions[0]
-          print(f"ℹ️ Promoting model {MODEL_NAME} version {latest_staging.version} to Production...")
-          client.transition_model_version_stage(
-              name=MODEL_NAME,
-              version=latest_staging.version,
-              stage="Production"
-          )
-          client.set_model_version_tag(name=MODEL_NAME, version=latest_staging.version, key="stage", value="Production")
-          print(f"✅ Model {MODEL_NAME} version {latest_staging.version} is now in PRODUCTION.")
-          PY
 
   # ========================
   # 5️⃣ Docker Build & Deploy

@@ -31,8 +31,7 @@ def load_config(path: str = "src/config.yaml") -> dict:
 def load_production_model(model_name="Credit_Risk_Model"):
     """
     Loads the latest 'Production' stage model from MLflow registry.
-    Falls back to 'Staging' if no Production model exists (for CI/CD pipelines).
-    Works both locally and in GitHub Actions (Windows-safe paths).
+    Falls back to 'Staging' or latest local run for CI/CD pipelines.
     """
     try:
         import os
@@ -43,7 +42,6 @@ def load_production_model(model_name="Credit_Risk_Model"):
 
         # ✅ Choose tracking URI dynamically
         MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
-
         if not MLFLOW_TRACKING_URI:
             if os.path.exists("mlruns"):
                 MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
@@ -53,23 +51,34 @@ def load_production_model(model_name="Credit_Risk_Model"):
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
 
-        # ✅ Fetch model versions
         client = MlflowClient()
-        versions = client.search_model_versions(f"name='{model_name}'")
 
-        # ✅ Try Production first
+        # ✅ Try Production
+        versions = client.search_model_versions(f"name='{model_name}'")
         prod_versions = [v for v in versions if v.current_stage == "Production"]
         if prod_versions:
             model_uri = f"models:/{model_name}/Production"
             print(f"✅ Found Production model version {prod_versions[0].version}")
+
         else:
-            # ✅ Fall back to Staging (important for CI/CD)
-            print("⚠️ No Production model found. Trying Staging...")
+            # ✅ Try Staging
             staging_versions = [v for v in versions if v.current_stage == "Staging"]
-            if not staging_versions:
-                raise HTTPException(status_code=503, detail=f"No Production or Staging model found for '{model_name}'")
-            model_uri = f"models:/{model_name}/Staging"
-            print(f"✅ Loaded Staging model version {staging_versions[0].version}")
+            if staging_versions:
+                model_uri = f"models:/{model_name}/Staging"
+                print(f"⚠️ Using Staging model version {staging_versions[0].version}")
+            else:
+                # ✅ Fallback: load latest run artifact directly (CI-safe)
+                print("⚠️ No registered model found. Loading latest run artifact...")
+                experiments = client.list_experiments()
+                if not experiments:
+                    raise HTTPException(status_code=503, detail="No MLflow experiments found.")
+                last_exp = experiments[-1]
+                runs = client.search_runs(last_exp.experiment_id, order_by=["attributes.start_time DESC"])
+                if not runs:
+                    raise HTTPException(status_code=503, detail="No model run found in MLflow.")
+                last_run_id = runs[0].info.run_id
+                model_uri = f"runs:/{last_run_id}/model"
+                print(f"✅ Loaded model from latest run: {last_run_id}")
 
         # ✅ Load model
         model = mlflow.sklearn.load_model(model_uri)
@@ -79,7 +88,6 @@ def load_production_model(model_name="Credit_Risk_Model"):
     except Exception as e:
         print(f"❌ Failed to load model: {e}")
         raise HTTPException(status_code=503, detail="Model not loaded. Try again later.")
-
 
 
 # ============================================================

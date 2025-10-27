@@ -59,24 +59,31 @@ MODEL_NAME = "Credit_Risk_Model"
 # ============================================================
 # 2️⃣ Load Production model dynamically from MLflow
 # ============================================================
-def load_production_model(model_name="Credit_Risk_Model"):
+def load_model_dynamic(model_name="Credit_Risk_Model"):
     client = MlflowClient()
-    
+    model = None
+
     try:
-        # Recommended: new API
-        prod_versions = client.search_model_versions(f"name='{model_name}'")
-        prod_versions = [v for v in prod_versions if v.current_stage == "Production"]
-        if not prod_versions:
-            raise RuntimeError(f"No Production model found for {model_name}")
-        model_uri = f"models:/{model_name}/Production"
+        # Try loading from MLflow Registry first
+        stage = os.getenv("MODEL_STAGE", "Production")
+        model_uri = f"models:/{model_name}/{stage}"
         model = mlflow.sklearn.load_model(model_uri)
-        print(f"✅ Loaded Production model {model_name} version {prod_versions[0].version}")
+        print(f"✅ Loaded model from MLflow stage: {stage}")
         return model
     except Exception as e:
-        print(f"⚠️ Could not load Production model from MLflow: {e}")
-        return None
+        print(f"⚠️ Could not load model from MLflow ({e})")
 
-model = load_production_model()
+    # 🔹 Fallback: load from local file if exists
+    if os.path.exists("models/model.pkl"):
+        print("🔁 Loading local model from models/model.pkl as fallback")
+        import joblib
+        return joblib.load("models/model.pkl")
+
+    print("❌ No model found locally or in MLflow.")
+    return None
+
+model = load_model_dynamic()
+
 
 # ============================================================
 # 3️⃣ Load precomputed SHAP explainer (optional)

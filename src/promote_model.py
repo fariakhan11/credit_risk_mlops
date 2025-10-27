@@ -4,39 +4,52 @@ promote_model.py
 Promotes the latest Staging model version to Production.
 """
 
-import os, pathlib
+import os
+import pathlib
 import mlflow
 from mlflow.tracking import MlflowClient
 
 # --- Step 1: Choose MLflow tracking URI ---
-# Default to local MLflow server
+# Default to local MLflow file-based store or server
 mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 
-# If running in GitHub Actions, use local file-based tracking
-if "GITHUB_ACTIONS" in os.environ:
+# If running in GitHub Actions, prefer the file-based mlruns directory
+if os.getenv("GITHUB_ACTIONS", "").lower() == "true":
     mlflow_tracking_uri = pathlib.Path("mlruns").resolve().as_uri()
 
 mlflow.set_tracking_uri(mlflow_tracking_uri)
-print(f"✅ MLflow tracking URI: {mlflow_tracking_uri}")
+print(f"✅ Using MLflow tracking URI: {mlflow_tracking_uri}")
 
 # --- Step 2: Define model name ---
 MODEL_NAME = "Credit_Risk_Model"
-client = MlflowClient()
+client = MlflowClient(tracking_uri=mlflow_tracking_uri)
 
-# --- Step 3: Get latest model in Staging ---
-staging_versions = client.search_model_versions(f"name='{MODEL_NAME}'")
-staging_versions = [v for v in staging_versions if v.current_stage == "Staging"]
+# --- Step 3: Locate latest model in Staging ---
+versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+staging_versions = sorted(
+    [v for v in versions if v.current_stage == "Staging"],
+    key=lambda v: int(v.version),
+    reverse=True,
+)
 
 if not staging_versions:
-    raise ValueError("❌ No model in Staging found to promote.")
+    raise SystemExit("❌ No Staging model found to promote.")
 
-latest_staging_version = staging_versions[0]
+latest = staging_versions[0]
+print(f"ℹ️ Found Staging model: {MODEL_NAME} (version {latest.version})")
 
 # --- Step 4: Promote to Production ---
 client.transition_model_version_stage(
     name=MODEL_NAME,
-    version=latest_staging_version.version,
-    stage="Production"
+    version=latest.version,
+    stage="Production",
 )
 
-print(f"✅ Model {MODEL_NAME} version {latest_staging_version.version} is now in Production.")
+client.set_model_version_tag(
+    name=MODEL_NAME,
+    version=latest.version,
+    key="stage",
+    value="Production",
+)
+
+print(f"✅ Model {MODEL_NAME} version {latest.version} successfully promoted to PRODUCTION.")
