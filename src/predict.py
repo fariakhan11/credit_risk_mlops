@@ -4,12 +4,14 @@ predict.py
 Loads the trained credit risk model from MLflow Production stage
 and performs predictions. Works for batch inference or CLI usage.
 """
-
-import pandas as pd
-import yaml
 import os
+import yaml
 import mlflow
+import mlflow.sklearn
 from mlflow.tracking import MlflowClient
+from fastapi import HTTPException
+import pandas as pd
+import pathlib
 
 # ============================================================
 # 1️⃣ Load configuration
@@ -20,18 +22,49 @@ def load_config(path: str = "src/config.yaml") -> dict:
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
+
 # ============================================================
-# 2️⃣ Load Production model dynamically
+# 2️⃣ Load Production model dynamically (cross-platform safe)
 # ============================================================
+
+
 def load_production_model(model_name="Credit_Risk_Model"):
-    client = MlflowClient()
-    prod_versions = client.get_latest_versions(name=model_name, stages=["Production"])
-    if not prod_versions:
-        raise ValueError(f"❌ No Production model found for {model_name}")
-    model_uri = f"models:/{model_name}/Production"
-    model = mlflow.sklearn.load_model(model_uri)
-    print(f"✅ Loaded Production model {model_name} version {prod_versions[0].version}")
-    return model
+    """
+    Loads the latest 'Production' stage model from MLflow registry.
+    Works locally (Windows-safe) and in CI/CD environments.
+    """
+    try:
+        # Detect CI/CD environment
+        MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+
+        if not MLFLOW_TRACKING_URI:
+            if os.path.exists("mlruns"):
+                # ✅ Use proper file URI with pathlib for MLflow registry
+                MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
+            else:
+                # ✅ Default to local MLflow server
+                MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"
+
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
+
+        # Fetch model from registry
+        client = MlflowClient()
+        versions = client.search_model_versions(f"name='{model_name}'")
+        prod_versions = [v for v in versions if v.current_stage == "Production"]
+
+        if not prod_versions:
+            raise HTTPException(status_code=503, detail=f"No Production model found for '{model_name}'")
+
+        model_uri = f"models:/{model_name}/Production"
+        model = mlflow.sklearn.load_model(model_uri)
+        print(f"✅ Loaded Production model {model_name} version {prod_versions[0].version}")
+        return model
+
+    except Exception as e:
+        print(f"❌ Failed to load model: {e}")
+        raise HTTPException(status_code=503, detail="Model not loaded. Try again later.")
+
 
 # ============================================================
 # 3️⃣ Predict function

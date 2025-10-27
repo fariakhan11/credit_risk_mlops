@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import pandas as pd
 import yaml
-import os
+import os, pathlib
 import json
 import traceback
 from typing import Dict
@@ -19,12 +19,23 @@ import mlflow
 from mlflow.tracking import MlflowClient
 import joblib
 
-# ============================================================
-# 0️⃣ Set MLflow tracking URI (supports local + CI/CD)
-# ============================================================
-mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
-mlflow.set_tracking_uri(mlflow_tracking_uri)
-print(f"✅ MLflow tracking URI: {mlflow_tracking_uri}")
+# -----------------------------
+# Set MLflow tracking URI dynamically
+# -----------------------------
+
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+
+# ✅ If running in GitHub Actions → use local file-based store
+if "GITHUB_ACTIONS" in os.environ:
+    MLFLOW_TRACKING_URI = f"file://{os.path.abspath('mlruns')}"
+
+# ✅ Otherwise, if not set manually → assume local MLflow server
+elif not MLFLOW_TRACKING_URI:
+    MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"
+
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
+
 
 # ============================================================
 # 1️⃣ Load configuration
@@ -43,16 +54,22 @@ MODEL_NAME = "Credit_Risk_Model"
 # ============================================================
 # 2️⃣ Load Production model dynamically from MLflow
 # ============================================================
-def load_production_model(model_name=MODEL_NAME):
+def load_production_model(model_name="Credit_Risk_Model"):
     client = MlflowClient()
-    prod_versions = client.get_latest_versions(name=model_name, stages=["Production"])
-    if not prod_versions:
-        raise RuntimeError(f"❌ No Production model found for {model_name}")
-
-    model_uri = f"models:/{model_name}/Production"
-    model = mlflow.sklearn.load_model(model_uri)
-    print(f"✅ Loaded Production model {model_name} version {prod_versions[0].version}")
-    return model
+    
+    try:
+        # Recommended: new API
+        prod_versions = client.search_model_versions(f"name='{model_name}'")
+        prod_versions = [v for v in prod_versions if v.current_stage == "Production"]
+        if not prod_versions:
+            raise RuntimeError(f"No Production model found for {model_name}")
+        model_uri = f"models:/{model_name}/Production"
+        model = mlflow.sklearn.load_model(model_uri)
+        print(f"✅ Loaded Production model {model_name} version {prod_versions[0].version}")
+        return model
+    except Exception as e:
+        print(f"⚠️ Could not load Production model from MLflow: {e}")
+        return None
 
 model = load_production_model()
 
@@ -121,8 +138,14 @@ def root():
 def health():
     return {"status": "ok", "model_loaded": model is not None}
 
-@app.post("/predict", tags=["Prediction"])
+@app.post("/predict", tags=["Prediction"], summary="Predict Credit Risk")
 def predict(input_data: CreditInput):
+
+    # 🔹 Check if model is loaded
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded. Try again later.")
+    
+
     try:
         df = pd.DataFrame([input_data.model_dump(by_alias=True)])
         expected_cols = [
@@ -148,10 +171,15 @@ def predict(input_data: CreditInput):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-@app.post("/explain", tags=["Explainability"])
+@app.post("/explain", tags=["Explainability"], summary="Explain Model Prediction")
 def explain(input_data: CreditInput):
+
+    # 🔹 Check if model is loaded
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded. Try again later.")
+
     try:
-        df = pd.DataFrame([input_data.dict(by_alias=True)])
+        df = pd.DataFrame([input_data.model_dump(by_alias=True)])
         expected_cols = [
             'Loan Amount', 'Debt-to-Income Ratio', 'Credit Score', 'Assets Value',
             'Age', 'Income', 'Number of Dependents', 'Education Level',
@@ -166,8 +194,12 @@ def explain(input_data: CreditInput):
         if explainer is not None:
             shap_values = explainer.shap_values(transformed)
         else:
-            explainer_local = shap.TreeExplainer(model.named_steps["model"])
-            shap_values = explainer_local.shap_values(transformed)
+            model_step = model.named_steps.get("model", model)
+            try:
+                explainer_local = shap.TreeExplainer(model_step)
+            except Exception:
+                explainer_local = shap.Explainer(model_step, feature_names=df.columns)
+            shap_values = explainer_local(transformed)
 
         if isinstance(shap_values, list):
             shap_array = shap_values[1][0] if len(shap_values) > 1 else shap_values[0][0]
@@ -176,7 +208,7 @@ def explain(input_data: CreditInput):
 
         shap_dict = dict(zip(df.columns, shap_array.tolist()))
         entry = {
-            "input": input_data.dict(by_alias=True),
+            "input": input_data.model_dump(by_alias=True),
             "explanation": shap_dict,
         }
         log_prediction(entry)

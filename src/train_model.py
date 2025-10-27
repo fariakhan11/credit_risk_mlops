@@ -33,11 +33,23 @@ from mlflow.tracking import MlflowClient
 # ==============================
 # 0️⃣ MLflow tracking URI
 # ==============================
-# If environment variable is set (e.g., GitHub Actions), use it
-mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
-mlflow.set_tracking_uri(mlflow_tracking_uri)
-print(f"✅ MLflow tracking URI: {mlflow_tracking_uri}")
+# Load config
+with open("src/config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
+mlflow_cfg = config["mlflow"]
+
+# ✅ Dynamically choose tracking URI
+tracking_uri = os.getenv("MLFLOW_TRACKING_URI", mlflow_cfg["tracking_uri"])
+
+# ✅ If running in CI/CD (like GitHub Actions), use local file-based tracking
+if "GITHUB_ACTIONS" in os.environ:
+    tracking_uri = f"file://{os.path.abspath('mlruns')}"
+
+mlflow.set_tracking_uri(tracking_uri)
+mlflow.set_experiment(mlflow_cfg["experiment_name"])
+
+print(f"✅ MLflow tracking URI: {tracking_uri}")
 # ==============================
 # 1️⃣ Load configuration
 # ==============================

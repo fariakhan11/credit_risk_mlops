@@ -2,83 +2,197 @@ name: Credit Risk MLOps CI/CD
 
 on:
   push:
-    branches: [main]    # Trigger on main branch pushes
-  workflow_dispatch:    # Allow manual runs from GitHub Actions tab
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
 
   # ========================
-  # 1️⃣ Train and Validate
+  # 1️⃣ Train + Validate
   # ========================
   train_and_validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: 🧾 Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: ⚙️ Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.9
 
-      - name: Install dependencies
+      - name: 💾 Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install openpyxl pytest  # Ensure Excel + testing support
+          pip install openpyxl pytest mlflow
 
-      - name: Set MLflow URI for CI/CD
+      - name: 🌐 Set MLflow tracking URI for CI/CD
+        # Use file-based mlruns inside workspace so MLflow calls succeed in CI
         run: echo "MLFLOW_TRACKING_URI=file://$GITHUB_WORKSPACE/mlruns" >> $GITHUB_ENV
-        
-      - name: Run training
+
+      - name: 🏋️ Train model
         run: python src/train_model.py
 
-      - name: Run validation tests (model metrics)
+      - name: ✅ Run model metric validation tests
         run: |
           echo "Running model validation tests..."
           pytest tests/test_model_metrics.py || exit 1
 
-      - name: Run API tests
+      - name: 🧪 Run API endpoint tests
         run: |
           echo "Running API tests..."
           pytest tests/test_api.py || exit 1
 
-      - name: Promote model to Production
-        run: python src/promote_model.py
+      # Option A: If your train_model.py already registers & tags new version to Staging,
+      # you can skip explicit staging promotion. If not, we'll promote in the next job.
+      - name: 📤 Upload MLflow runs directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlruns
+          path: mlruns/
 
+  
+  # ========================
+  # 3️⃣ Test Staging Model
+  # ========================
+  test_staging_model:
+    runs-on: ubuntu-latest
+    needs: train_and_validate
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v3
+
+      - name: 📥 Download MLflow runs directory
+        uses: actions/download-artifact@v4
+        with:
+          name: mlruns
+          path: mlruns/
+
+      - name: ⚙️ Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install mlflow pytest
+
+      - name: 🌐 Export MLFLOW_TRACKING_URI (file-based)
+        run: echo "MLFLOW_TRACKING_URI=file://$GITHUB_WORKSPACE/mlruns" >> $GITHUB_ENV
+
+      - name: 🧪 Run staging tests (API + metrics)
+        run: |
+          echo "Running API tests and model checks against Staging..."
+          pytest tests/test_api.py || exit 1
+          pytest tests/test_model_metrics.py || exit 1
 
   # ========================
-  # 2️⃣ Docker Build & Deploy
+  # 4️⃣ Promote to Production
+  # ========================
+  promote_to_production:
+    runs-on: ubuntu-latest
+    needs: test_staging_model
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v3
+
+      - name: 📥 Download MLflow runs directory
+        uses: actions/download-artifact@v4
+        with:
+          name: mlruns
+          path: mlruns/
+
+      - name: ⚙️ Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: 📦 Install mlflow
+        run: pip install mlflow
+
+      - name: 🚀 Promote model from Staging to Production
+        run: |
+          python - <<'PY'
+          import os
+          from mlflow.tracking import MlflowClient
+
+          client = MlflowClient(tracking_uri=os.getenv("MLFLOW_TRACKING_URI"))
+          MODEL_NAME = "Credit_Risk_Model"
+
+          versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+          staging_versions = [v for v in versions if v.current_stage == "Staging"]
+          if not staging_versions:
+              print("❌ No Staging version found to promote.")
+              raise SystemExit(1)
+
+          # choose the most recent staging version
+          latest_staging = staging_versions[0]
+          print(f"ℹ️ Promoting model {MODEL_NAME} version {latest_staging.version} to Production...")
+          client.transition_model_version_stage(
+              name=MODEL_NAME,
+              version=latest_staging.version,
+              stage="Production"
+          )
+          client.set_model_version_tag(name=MODEL_NAME, version=latest_staging.version, key="stage", value="Production")
+          print(f"✅ Model {MODEL_NAME} version {latest_staging.version} is now in PRODUCTION.")
+          PY
+
+  # ========================
+  # 5️⃣ Docker Build & Deploy
   # ========================
   deploy:
     runs-on: ubuntu-latest
-    needs: train_and_validate   # Runs only after previous job succeeds
+    needs: promote_to_production
     steps:
-      - name: Checkout code
+      - name: 🧾 Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
+      - name: 📥 Download MLflow runs directory
+        uses: actions/download-artifact@v4
+        with:
+          name: mlruns
+          path: mlruns/
+
+      - name: 🧱 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to DockerHub
+      - name: 🔑 Log in to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Docker image
+      - name: 🏗️ Build Docker image
         run: docker build -t credit-risk-api:latest .
 
-      - name: Tag Docker image
+      - name: 🧩 Verify Docker image runs correctly
+        run: |
+          docker run --rm credit-risk-api:latest python -c "import sys; print('✅ Image built successfully')"
+
+      - name: 🏷️ Tag Docker image
         run: docker tag credit-risk-api:latest ${{ secrets.DOCKER_USERNAME }}/credit-risk-api:latest
 
-      - name: Push Docker image to DockerHub
+      - name: 📤 Push Docker image to DockerHub
         run: docker push ${{ secrets.DOCKER_USERNAME }}/credit-risk-api:latest
 
-      # Optional: auto-deploy (only works if self-hosted runner)
-      - name: Deploy container (for self-hosted servers)
+      # Optional: for self-hosted deployment servers
+      - name: 🚀 Deploy container (if self-hosted)
         if: ${{ runner.environment == 'self-hosted' }}
         run: |
           docker stop credit-risk-api || true
           docker rm credit-risk-api || true
-          docker run -d -p 8000:8000 --name credit-risk-api ${{ secrets.DOCKER_USERNAME }}/credit-risk-api:latest
+          docker run -d -p 8000:8000 \
+            -e MLFLOW_TRACKING_URI=file://$(pwd)/mlruns \
+            --name credit-risk-api \
+            ${{ secrets.DOCKER_USERNAME }}/credit-risk-api:latest
