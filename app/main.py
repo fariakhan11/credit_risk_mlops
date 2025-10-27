@@ -19,17 +19,17 @@ import mlflow
 from mlflow.tracking import MlflowClient
 import joblib
 
-
 # ============================================================
-# 0️⃣ Set MLflow tracking URI (before loading Production model)
+# 0️⃣ Set MLflow tracking URI (supports local + CI/CD)
 # ============================================================
-mlflow.set_tracking_uri("http://127.0.0.1:5000")  # adjust if your server runs elsewhere
+mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+mlflow.set_tracking_uri(mlflow_tracking_uri)
+print(f"✅ MLflow tracking URI: {mlflow_tracking_uri}")
 
 # ============================================================
 # 1️⃣ Load configuration
 # ============================================================
 CONFIG_PATH = "src/config.yaml"
-
 try:
     with open(CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
@@ -60,13 +60,13 @@ model = load_production_model()
 # 3️⃣ Load precomputed SHAP explainer (optional)
 # ============================================================
 explainer = None
-try:
-    if os.path.exists(SHAP_DATA_PATH):
+if os.path.exists(SHAP_DATA_PATH):
+    try:
         shap_data = joblib.load(SHAP_DATA_PATH)
         explainer = shap_data.get("explainer")
         print("✅ Loaded SHAP explainer from saved data.")
-except Exception as e:
-    print(f"⚠️ Could not load SHAP explainer: {e}")
+    except Exception as e:
+        print(f"⚠️ Could not load SHAP explainer: {e}")
 
 # ============================================================
 # 4️⃣ FastAPI initialization
@@ -85,20 +85,22 @@ app = FastAPI(
 # ============================================================
 # 5️⃣ Input Schema
 # ============================================================
+
 class CreditInput(BaseModel):
-    Loan_Amount: float = Field(..., alias="Loan Amount", example=50000)
-    Debt_to_Income_Ratio: float = Field(..., alias="Debt-to-Income Ratio", example=0.35)
-    Credit_Score: float = Field(..., alias="Credit Score", example=720)
-    Assets_Value: float = Field(..., alias="Assets Value", example=150000)
-    Age: float = Field(..., example=32)
-    Income: float = Field(..., example=80000)
-    Number_of_Dependents: int = Field(..., alias="Number of Dependents", example=2)
-    Education_Level: str = Field(..., alias="Education Level", example="Bachelor's")
-    Payment_History: str = Field(..., alias="Payment History", example="Good")
-    Marital_Status: str = Field(..., alias="Marital Status", example="Single")
-    Gender: str = Field(..., example="Female")
-    Employment_Status: str = Field(..., alias="Employment Status", example="Employed")
-    Loan_Purpose: str = Field(..., alias="Loan Purpose", example="Home Improvement")
+    Loan_Amount: float = Field(..., alias="Loan Amount", json_schema_extra={"example": 50000})
+    Debt_to_Income_Ratio: float = Field(..., alias="Debt-to-Income Ratio", json_schema_extra={"example": 0.35})
+    Credit_Score: float = Field(..., alias="Credit Score", json_schema_extra={"example": 720})
+    Assets_Value: float = Field(..., alias="Assets Value", json_schema_extra={"example": 150000})
+    Age: float = Field(..., json_schema_extra={"example": 32})
+    Income: float = Field(..., json_schema_extra={"example": 80000})
+    Number_of_Dependents: int = Field(..., alias="Number of Dependents", json_schema_extra={"example": 2})
+    Education_Level: str = Field(..., alias="Education Level", json_schema_extra={"example": "Bachelor's"})
+    Payment_History: str = Field(..., alias="Payment History", json_schema_extra={"example": "Good"})
+    Marital_Status: str = Field(..., alias="Marital Status", json_schema_extra={"example": "Single"})
+    Gender: str = Field(..., json_schema_extra={"example": "Female"})
+    Employment_Status: str = Field(..., alias="Employment Status", json_schema_extra={"example": "Employed"})
+    Loan_Purpose: str = Field(..., alias="Loan Purpose", json_schema_extra={"example": "Home Improvement"})
+
 
 # ============================================================
 # 6️⃣ Utility to log predictions
@@ -122,7 +124,7 @@ def health():
 @app.post("/predict", tags=["Prediction"])
 def predict(input_data: CreditInput):
     try:
-        df = pd.DataFrame([input_data.dict(by_alias=True)])
+        df = pd.DataFrame([input_data.model_dump(by_alias=True)])
         expected_cols = [
             'Loan Amount', 'Debt-to-Income Ratio', 'Credit Score', 'Assets Value',
             'Age', 'Income', 'Number of Dependents', 'Education Level',
@@ -136,7 +138,7 @@ def predict(input_data: CreditInput):
         pred_label = int(pred_prob > 0.5)
 
         entry = {
-            "input": input_data.dict(by_alias=True),
+            "input": input_data.model_dump(by_alias=True),
             "prediction": pred_label,
             "probability": round(float(pred_prob), 4),
         }
@@ -149,10 +151,7 @@ def predict(input_data: CreditInput):
 @app.post("/explain", tags=["Explainability"])
 def explain(input_data: CreditInput):
     try:
-        # Convert input to DataFrame
         df = pd.DataFrame([input_data.dict(by_alias=True)])
-
-        # Validate expected columns
         expected_cols = [
             'Loan Amount', 'Debt-to-Income Ratio', 'Credit Score', 'Assets Value',
             'Age', 'Income', 'Number of Dependents', 'Education Level',
@@ -162,29 +161,20 @@ def explain(input_data: CreditInput):
         if missing_cols:
             raise HTTPException(status_code=400, detail=f"Missing columns: {missing_cols}")
 
-        # Transform input using model's preprocessor
         transformed = model.named_steps["preprocessor"].transform(df)
 
-        # Generate SHAP values
         if explainer is not None:
             shap_values = explainer.shap_values(transformed)
         else:
             explainer_local = shap.TreeExplainer(model.named_steps["model"])
             shap_values = explainer_local.shap_values(transformed)
 
-        # Handle different SHAP output formats
         if isinstance(shap_values, list):
-            if len(shap_values) > 1:
-                shap_array = shap_values[1][0]  # Multiclass or binary classification
-            else:
-                shap_array = shap_values[0][0]  # Single output
+            shap_array = shap_values[1][0] if len(shap_values) > 1 else shap_values[0][0]
         else:
-            shap_array = shap_values[0]  # Regression
+            shap_array = shap_values[0]
 
-        # Map SHAP values to input features
         shap_dict = dict(zip(df.columns, shap_array.tolist()))
-
-        # Log and return explanation
         entry = {
             "input": input_data.dict(by_alias=True),
             "explanation": shap_dict,

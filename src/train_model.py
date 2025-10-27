@@ -31,6 +31,14 @@ from sklearn.impute import SimpleImputer
 from mlflow.tracking import MlflowClient
 
 # ==============================
+# 0️⃣ MLflow tracking URI
+# ==============================
+# If environment variable is set (e.g., GitHub Actions), use it
+mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+mlflow.set_tracking_uri(mlflow_tracking_uri)
+print(f"✅ MLflow tracking URI: {mlflow_tracking_uri}")
+
+# ==============================
 # 1️⃣ Load configuration
 # ==============================
 with open("src/config.yaml", "r") as f:

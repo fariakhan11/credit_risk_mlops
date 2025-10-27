@@ -3,14 +3,15 @@ promote_model.py
 -------------------------------------
 Promotes the latest Staging model version to Production.
 """
-
-from mlflow.tracking import MlflowClient
+import os
 import mlflow
+from mlflow.tracking import MlflowClient
 
-mlflow.set_tracking_uri("http://127.0.0.1:5000")  # adjust if your server runs elsewhere
+mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+mlflow.set_tracking_uri(mlflow_tracking_uri)
+print(f"✅ MLflow tracking URI: {mlflow_tracking_uri}")
 
 MODEL_NAME = "Credit_Risk_Model"
-
 client = MlflowClient()
 
 # Fetch the latest version in Staging

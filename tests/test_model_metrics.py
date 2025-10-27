@@ -5,24 +5,46 @@ Checks model performance metrics before promotion.
 Fails pipeline if metrics below threshold.
 """
 
+import os
 import mlflow
 
-# Set MLflow tracking URI (same as your local server)
-mlflow.set_tracking_uri("http://127.0.0.1:5000")
+# ===============================
+# 0️⃣ Set MLflow tracking URI
+# ===============================
+# Use env variable if set (for GitHub Actions CI), otherwise default to local server
+mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+mlflow.set_tracking_uri(mlflow_tracking_uri)
 
-EXPERIMENT_NAME = "Credit_Risk_Experiment"
-MIN_ACCURACY = 0.70  # define your minimum acceptable score
+EXPERIMENT_NAME = "Credit_Risk_Scoring"
+MIN_ACCURACY = 0.70  # minimum acceptable accuracy
+MIN_PRECISION = 0.60
+MIN_RECALL = 0.40
 
 def test_model_metrics():
     client = mlflow.tracking.MlflowClient()
+    
+    # ✅ Check experiment exists
     experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
-    assert experiment is not None, "❌ Experiment not found in MLflow."
+    assert experiment is not None, f"❌ Experiment '{EXPERIMENT_NAME}' not found in MLflow."
 
-    runs = client.search_runs(experiment_ids=[experiment.experiment_id], order_by=["metrics.accuracy DESC"], max_results=1)
-    assert len(runs) > 0, "❌ No runs found in MLflow."
+    # ✅ Fetch latest run
+    runs = client.search_runs(
+        experiment_ids=[experiment.experiment_id],
+        order_by=["attributes.start_time DESC"],
+        max_results=1
+    )
+    assert runs, "❌ No runs found in experiment."
 
     latest_run = runs[0]
-    accuracy = latest_run.data.metrics.get("accuracy", 0.0)
-    print(f"✅ Latest model accuracy: {accuracy}")
+    metrics = latest_run.data.metrics
 
-    assert accuracy >= MIN_ACCURACY, f"❌ Model accuracy {accuracy} below minimum threshold {MIN_ACCURACY}"
+    accuracy = metrics.get("accuracy", 0.0)
+    precision = metrics.get("precision", 0.0)
+    recall = metrics.get("recall", 0.0)
+
+    print(f"✅ Latest run metrics: accuracy={accuracy}, precision={precision}, recall={recall}")
+
+    # ✅ Threshold checks
+    assert accuracy >= MIN_ACCURACY, f"❌ Accuracy {accuracy} below threshold {MIN_ACCURACY}"
+    assert precision >= MIN_PRECISION, f"❌ Precision {precision} below threshold {MIN_PRECISION}"
+    assert recall >= MIN_RECALL, f"❌ Recall {recall} below threshold {MIN_RECALL}"
