@@ -54,9 +54,10 @@ if not MLFLOW_TRACKING_URI:
             MLFLOW_TRACKING_URI = mlflow_cfg.get("tracking_uri", "http://127.0.0.1:5000")
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-mlflow.set_experiment(mlflow_cfg["experiment_name"])
-
 print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
+print(f"🔍 Using experiment: {mlflow_cfg['experiment_name']}")
+
+mlflow.set_experiment(mlflow_cfg["experiment_name"])
 
 # ==============================
 # 1️⃣ Load configuration

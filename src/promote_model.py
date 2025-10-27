@@ -4,16 +4,17 @@ promote_model.py
 Promotes the latest Staging model version to Production.
 """
 
-import os
+import os, pathlib
 import mlflow
 from mlflow.tracking import MlflowClient
 
 # --- Step 1: Choose MLflow tracking URI ---
+# Default to local MLflow server
 mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 
 # If running in GitHub Actions, use local file-based tracking
 if "GITHUB_ACTIONS" in os.environ:
-    mlflow_tracking_uri = f"file://{os.path.abspath('mlruns')}"
+    mlflow_tracking_uri = pathlib.Path("mlruns").resolve().as_uri()
 
 mlflow.set_tracking_uri(mlflow_tracking_uri)
 print(f"✅ MLflow tracking URI: {mlflow_tracking_uri}")

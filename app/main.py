@@ -23,15 +23,20 @@ import joblib
 # Set MLflow tracking URI dynamically
 # -----------------------------
 
+# Prefer environment variable if set
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 
-# ✅ If running in GitHub Actions → use local file-based store
-if "GITHUB_ACTIONS" in os.environ:
-    MLFLOW_TRACKING_URI = f"file://{os.path.abspath('mlruns')}"
-
-# ✅ Otherwise, if not set manually → assume local MLflow server
-elif not MLFLOW_TRACKING_URI:
-    MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"
+# If not set, choose automatically
+if not MLFLOW_TRACKING_URI:
+    if "GITHUB_ACTIONS" in os.environ:
+        # Inside CI runner → use local file path
+        MLFLOW_TRACKING_URI = f"file://{os.path.abspath('mlruns')}"
+    elif os.path.exists("mlruns"):
+        # Local development → use file-based mlruns folder
+        MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
+    else:
+        # If running locally *and* MLflow UI is started manually
+        MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
