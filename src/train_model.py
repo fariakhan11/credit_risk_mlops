@@ -31,39 +31,52 @@ from sklearn.impute import SimpleImputer
 from mlflow.tracking import MlflowClient
 
 # ==============================
-# 0️⃣ MLflow tracking URI
+# 0️⃣ MLflow Tracking Setup
 # ==============================
 
+import os
+import yaml
+import pathlib
+import mlflow
+
+# --- Load configuration once ---
 with open("src/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 mlflow_cfg = config["mlflow"]
 
-# ✅ Force file-based tracking when in GitHub Actions
+# --- Dynamically set MLflow tracking URI ---
 if "GITHUB_ACTIONS" in os.environ:
+    # ✅ Use local file-based tracking in CI/CD
     MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
 else:
-    # Local or manual run
+    # ✅ Use environment variable, or fallback to config, or local MLflow server
     MLFLOW_TRACKING_URI = os.getenv(
         "MLFLOW_TRACKING_URI",
         mlflow_cfg.get("tracking_uri", "http://127.0.0.1:5000")
     )
 
+# --- Apply MLflow setup ---
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-mlflow.set_experiment(mlflow_cfg["experiment_name"])
+
+EXPERIMENT_NAME = mlflow_cfg["experiment_name"]
+MODEL_REGISTRY_NAME = "Credit_Risk_Model"
+
+try:
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    print(f"🔍 Using experiment: {EXPERIMENT_NAME}")
+except Exception as e:
+    print(f"⚠️ Could not set experiment '{EXPERIMENT_NAME}': {e}")
+    mlflow.set_experiment("Default")
+
 print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
 
 # ==============================
-# 1️⃣ Load configuration
+# 1️⃣ Load Other Configuration Paths
 # ==============================
-with open("src/config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-
 DATA_PATH = config["paths"]["data"]
 MODEL_PATH = config["paths"]["model"]
-MLFLOW_TRACKING_URI = config["mlflow"]["tracking_uri"]
-EXPERIMENT_NAME = config["mlflow"]["experiment_name"]
-MODEL_REGISTRY_NAME = "Credit_Risk_Model"
+
 
 # ==============================
 # 2️⃣ Load dataset
