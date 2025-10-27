@@ -39,25 +39,19 @@ with open("src/config.yaml", "r") as f:
 
 mlflow_cfg = config["mlflow"]
 
-# Dynamically choose tracking URI
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
-
-if not MLFLOW_TRACKING_URI:
-    if "GITHUB_ACTIONS" in os.environ:
-        # ✅ Use local file path in CI/CD (no MLflow server available)
-        MLFLOW_TRACKING_URI = f"file://{os.path.abspath('mlruns')}"
-    else:
-        # ✅ Local dev: use mlruns folder or MLflow UI if running
-        if os.path.exists("mlruns"):
-            MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
-        else:
-            MLFLOW_TRACKING_URI = mlflow_cfg.get("tracking_uri", "http://127.0.0.1:5000")
+# ✅ Force file-based tracking when in GitHub Actions
+if "GITHUB_ACTIONS" in os.environ:
+    MLFLOW_TRACKING_URI = pathlib.Path("mlruns").resolve().as_uri()
+else:
+    # Local or manual run
+    MLFLOW_TRACKING_URI = os.getenv(
+        "MLFLOW_TRACKING_URI",
+        mlflow_cfg.get("tracking_uri", "http://127.0.0.1:5000")
+    )
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
-print(f"🔍 Using experiment: {mlflow_cfg['experiment_name']}")
-
 mlflow.set_experiment(mlflow_cfg["experiment_name"])
+print(f"✅ MLflow tracking URI: {MLFLOW_TRACKING_URI}")
 
 # ==============================
 # 1️⃣ Load configuration
